@@ -15,7 +15,7 @@ export const getSupabasePrisma = (token: string) => {
     return prisma.$extends({
         query: {
             $allModels: {
-                async $allOperations({ args, query }) {
+                async $allOperations({ args, query }: { args: any; query: (args: any) => Promise<any> }) {
                     // Set the JWT token in a local variable for Supabase RLS
                     await prisma.$executeRawUnsafe(`SET LOCAL "request.jwt.claims" = '${token}';`);
                     return query(args);
