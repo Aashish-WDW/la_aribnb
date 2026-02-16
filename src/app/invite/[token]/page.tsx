@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 import { Loader2, CheckCircle2, XCircle, UserPlus } from "lucide-react";
 
-export default function InvitePage({ params }: { params: { token: string } }) {
+export default function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+    const { token } = React.use(params);
     const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'redirect'>('loading');
     const [message, setMessage] = useState('');
     const [propertyName, setPropertyName] = useState('');
@@ -25,12 +26,12 @@ export default function InvitePage({ params }: { params: { token: string } }) {
                 // Not authenticated, redirect to login with return path
                 setStatus('redirect');
                 setMessage('Redirecting to login...');
-                router.push(`/login?redirect=${encodeURIComponent(`/invite/${params.token}`)}`);
+                router.push(`/login?redirect=${encodeURIComponent(`/invite/${token}`)}`);
                 return;
             }
 
             // User is authenticated, accept the invitation
-            const response = await fetch(`/api/invitations/${params.token}/accept`, {
+            const response = await fetch(`/api/invitations/${token}/accept`, {
                 method: 'POST',
             });
 

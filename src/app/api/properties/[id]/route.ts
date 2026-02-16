@@ -3,8 +3,9 @@ import { createClientServer, getServiceSupabase } from "@/lib/supabase-server";
 
 export async function GET(
     req: Request,
-    { params }: { params: { id: string } }
+    props: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await props.params;
     const supabaseClient = await createClientServer();
     const { data: { user } } = await supabaseClient.auth.getUser();
     const userId = user?.id;
@@ -17,7 +18,7 @@ export async function GET(
     const { data: property, error } = await supabase
         .from('Property')
         .select('*, rooms:Room(*)')
-        .eq('id', params.id)
+        .eq('id', id)
         .single(); // Returns null if not found or error if multiple? single() errors if 0 rows. maybe() returns null.
 
     if (error || !property) return new NextResponse("Not Found", { status: 404 });
@@ -28,8 +29,9 @@ export async function GET(
 
 export async function DELETE(
     req: Request,
-    { params }: { params: { id: string } }
+    props: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await props.params;
     const supabaseClient = await createClientServer();
     const { data: { user } } = await supabaseClient.auth.getUser();
     const userId = user?.id;
@@ -43,7 +45,7 @@ export async function DELETE(
         const { data: property } = await supabase
             .from('Property')
             .select('ownerId')
-            .eq('id', params.id)
+            .eq('id', id)
             .single();
 
         if (!property) return new NextResponse("Not Found", { status: 404 });
@@ -52,7 +54,7 @@ export async function DELETE(
         const { error } = await supabase
             .from('Property')
             .delete()
-            .eq('id', params.id);
+            .eq('id', id);
 
         if (error) throw error;
 
@@ -65,8 +67,9 @@ export async function DELETE(
 
 export async function PATCH(
     req: Request,
-    { params }: { params: { id: string } }
+    props: { params: Promise<{ id: string }> }
 ) {
+    const { id } = await props.params;
     const supabaseClient = await createClientServer();
     const { data: { user } } = await supabaseClient.auth.getUser();
     const userId = user?.id;
@@ -83,7 +86,7 @@ export async function PATCH(
         const { data: property } = await supabase
             .from('Property')
             .select('ownerId')
-            .eq('id', params.id)
+            .eq('id', id)
             .single();
 
         if (!property) return new NextResponse("Not Found", { status: 404 });
@@ -97,7 +100,7 @@ export async function PATCH(
                 description,
                 updatedAt: new Date().toISOString()
             })
-            .eq('id', params.id);
+            .eq('id', id);
 
         if (updateError) throw updateError;
 
@@ -107,7 +110,7 @@ export async function PATCH(
             const { data: existingRooms } = await supabase
                 .from('Room')
                 .select('id')
-                .eq('propertyId', params.id);
+                .eq('propertyId', id);
 
             const existingIds = new Set((existingRooms || []).map((r: any) => r.id));
             const keepIds = new Set();
@@ -129,7 +132,7 @@ export async function PATCH(
                     await supabase
                         .from('Room')
                         .insert({
-                            propertyId: params.id,
+                            propertyId: id,
                             name: room.name,
                             basePrice: parseFloat(room.price || room.basePrice || "0"),
                             updatedAt: new Date().toISOString()
@@ -151,7 +154,7 @@ export async function PATCH(
         const { data: updatedProperty } = await supabase
             .from('Property')
             .select('*, rooms:Room(*)')
-            .eq('id', params.id)
+            .eq('id', id)
             .single();
 
         return NextResponse.json(updatedProperty);
