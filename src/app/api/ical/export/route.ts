@@ -68,6 +68,7 @@ export async function GET(req: Request) {
 
 /** Return an empty but valid .ics so Airbnb never sees HTML */
 function icsEmpty(calName: string): Response {
+    const now = toICalUTC(new Date());
     const body = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -75,6 +76,16 @@ function icsEmpty(calName: string): Response {
         `X-WR-CALNAME:${calName}`,
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
+        // RFC 5545 requires at least one component
+        "BEGIN:VEVENT",
+        `UID:placeholder@lookaround.app`,
+        `DTSTAMP:${now}`,
+        `DTSTART:${now}`,
+        `DTEND:${now}`,
+        "SUMMARY:No bookings",
+        "STATUS:CANCELLED",
+        "TRANSP:TRANSPARENT",
+        "END:VEVENT",
         "END:VCALENDAR",
     ].join("\r\n");
 
@@ -86,6 +97,7 @@ function icsEmpty(calName: string): Response {
 
 /** Return an error wrapped inside a valid .ics file */
 function icsError(message: string): Response {
+    const now = toICalUTC(new Date());
     const body = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -93,6 +105,16 @@ function icsError(message: string): Response {
         `X-WR-CALNAME:Error - ${message}`,
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
+        // RFC 5545 requires at least one component
+        "BEGIN:VEVENT",
+        `UID:error@lookaround.app`,
+        `DTSTAMP:${now}`,
+        `DTSTART:${now}`,
+        `DTEND:${now}`,
+        `SUMMARY:${escapeICalText(message)}`,
+        "STATUS:CANCELLED",
+        "TRANSP:TRANSPARENT",
+        "END:VEVENT",
         "END:VCALENDAR",
     ].join("\r\n");
 
@@ -124,6 +146,19 @@ function buildICS(
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ];
+
+    // RFC 5545 requires at least one component — add placeholder if no bookings
+    if (bookings.length === 0) {
+        lines.push("BEGIN:VEVENT");
+        lines.push(`UID:empty-${calendarName.replace(/\s/g, "-")}@lookaround.app`);
+        lines.push(`DTSTAMP:${now}`);
+        lines.push(`DTSTART:${now}`);
+        lines.push(`DTEND:${now}`);
+        lines.push("SUMMARY:No bookings");
+        lines.push("STATUS:CANCELLED");
+        lines.push("TRANSP:TRANSPARENT");
+        lines.push("END:VEVENT");
+    }
 
     for (const b of bookings) {
         const dtstart = toICalUTC(new Date(b.checkIn));
