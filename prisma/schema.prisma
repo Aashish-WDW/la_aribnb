@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Property {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  totalPrice  Float?   // Price for entire property booking
+  ownerId     String   // Supabase User ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rooms       Room[]
+  bookings    Booking[]
+  blocks      Block[]
+  permissions UserPermission[]
+  invitations Invitation[]
+}
+
+model Room {
+  id          String   @id @default(cuid())
+  propertyId  String
+  name        String
+  description String?
+  basePrice   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  bookings    Booking[]
+  blocks      Block[]
+}
+
+enum BookingSource {
+  AIRBNB
+  BOOKING_COM
+  DIRECT
+  WHATSAPP
+  OFFLINE
+  OTHER
+}
+
+model Booking {
+  id            String        @id @default(cuid())
+  propertyId    String
+  roomId        String?       // Null if booking the entire property
+  customerName  String
+  source        BookingSource @default(DIRECT)
+  checkIn       DateTime
+  checkOut      DateTime
+  price         Float
+  guestRequests String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  property      Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room          Room?         @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([checkIn, checkOut])
+}
+
+model Block {
+  id         String   @id @default(cuid())
+  propertyId String
+  roomId     String?  // Null if blocking the entire property
+  reason     String?  // e.g., "Maintenance", "Owner Stay"
+  startDate  DateTime
+  endDate    DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  room       Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([startDate, endDate])
+}
+
+enum Role {
+  OWNER
+  CARETAKER
+  VIEWER
+}
+
+model UserPermission {
+  id         String   @id @default(cuid())
+  userId     String   // Supabase User ID
+  propertyId String
+  role       Role     @default(VIEWER)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, propertyId])
+}
+
+model Invitation {
+  id         String   @id @default(cuid())
+  email      String
+  role       Role     @default(VIEWER)
+  propertyId String
+  invitedBy  String?  // User ID who sent the invitation
+  status     String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED
+  token      String   @unique
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+}
+
+model InventoryItem {
+  id                String   @id @default(cuid())
+  name              String
+  quantity          Int      @default(0)
+  description       String?
+  link              String?  @default("")
+  imageUrl          String?  @default("")
+  ownerId           String   // Supabase User ID
+  propertyId        String?  // Null if global
+  lowStockThreshold Int?     @default(10)
+  reminderEnabled   Boolean? @default(false)
+  nextReminderDate  DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  property          Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@index([propertyId])
+}
