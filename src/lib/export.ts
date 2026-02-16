@@ -29,7 +29,7 @@ export function downloadPDF(data: any[], filename: string, title: string) {
 
     autoTable(doc, {
         head: [headers],
-        body: rows,
+        body: rows as any,
         startY: 40,
         styles: { fontSize: 10, cellPadding: 3 },
         headStyles: { fillColor: [66, 133, 244] }, // Brand color approximation
