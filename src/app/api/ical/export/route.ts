@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import { createClientServer, getServiceSupabase } from "@/lib/supabase-server";
+import { getServiceSupabase } from "@/lib/supabase-server";
 import { generateICalFeed } from "@/lib/ical";
 
 // GET ?propertyId=xxx — Export bookings for a property as .ics
+// This route is PUBLIC (no auth) so external platforms like Airbnb can fetch it.
+// Security: the propertyId UUID acts as the secret token.
 export async function GET(req: Request) {
-    const supabaseClient = await createClientServer();
-    const { data: { user } } = await supabaseClient.auth.getUser();
-    if (!user) return new NextResponse("Unauthorized", { status: 401 });
-
     const supabase = getServiceSupabase();
 
     try {
@@ -21,19 +19,18 @@ export async function GET(req: Request) {
             );
         }
 
-        // Verify ownership
+        // Fetch property (no ownership check — this is a public feed URL)
         const { data: property, error: propError } = await supabase
             .from("Property")
             .select("id, name")
             .eq("id", propertyId)
-            .eq("ownerId", user.id)
             .single();
 
         if (propError || !property) {
             return NextResponse.json({ error: "Property not found" }, { status: 404 });
         }
 
-        // Fetch all bookings for this property
+        // Fetch all non-cancelled bookings for this property
         const { data: bookings, error: bookError } = await supabase
             .from("Booking")
             .select("id, customerName, checkIn, checkOut, source, notes")
@@ -50,6 +47,8 @@ export async function GET(req: Request) {
             headers: {
                 "Content-Type": "text/calendar; charset=utf-8",
                 "Content-Disposition": `attachment; filename="${property.name.replace(/[^a-zA-Z0-9]/g, "_")}_calendar.ics"`,
+                // Allow caching for 5 minutes so Airbnb doesn't hammer the endpoint
+                "Cache-Control": "public, max-age=300, s-maxage=300",
             },
         });
     } catch (error) {
