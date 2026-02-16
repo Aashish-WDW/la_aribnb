@@ -23,6 +23,7 @@ const navigation = [
     { name: "Analytics", href: "/dashboard/analytics", icon: LineChart },
     { name: "Tasks", href: "/dashboard/tasks", icon: CheckSquare },
     { name: "Calendar", href: "/dashboard/calendar", icon: Calendar },
+    { name: "Sync Calendar", href: "/dashboard/sync-calendar", icon: RefreshCw },
     { name: "iCal Sync", href: "/dashboard/ical", icon: RefreshCw },
     { name: "Properties", href: "/dashboard/properties", icon: Home },
     { name: "Inventory", href: "/dashboard/inventory", icon: Package },

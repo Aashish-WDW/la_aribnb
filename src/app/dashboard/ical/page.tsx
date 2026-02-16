@@ -16,6 +16,7 @@ import {
     X,
 } from "lucide-react";
 import { toast } from "react-hot-toast";
+import { useProperty } from "@/context/PropertyContext";
 
 interface ICalFeed {
     id: string;
@@ -27,56 +28,52 @@ interface ICalFeed {
     property: { id: string; name: string } | null;
 }
 
-interface Property {
-    id: string;
-    name: string;
-}
-
 export default function ICalPage() {
+    const { activePropertyId, activeProperty, loading: propLoading } = useProperty();
+
     const [feeds, setFeeds] = useState<ICalFeed[]>([]);
-    const [properties, setProperties] = useState<Property[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState<string | null>(null);
     const [showAddForm, setShowAddForm] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    // Form state
+    // Form state — only name and URL now
     const [newName, setNewName] = useState("");
     const [newUrl, setNewUrl] = useState("");
-    const [newPropertyId, setNewPropertyId] = useState("");
     const [submitting, setSubmitting] = useState(false);
 
-    const fetchData = useCallback(async () => {
+    const fetchFeeds = useCallback(async () => {
         setLoading(true);
         try {
-            const [feedsRes, propsRes] = await Promise.all([
-                fetch("/api/ical"),
-                fetch("/api/properties"),
-            ]);
-
-            if (feedsRes.ok) {
-                setFeeds(await feedsRes.json());
-            }
-            if (propsRes.ok) {
-                const propsData = await propsRes.json();
-                setProperties(propsData);
-                if (propsData.length > 0 && !newPropertyId) {
-                    setNewPropertyId(propsData[0].id);
+            const res = await fetch("/api/ical");
+            if (res.ok) {
+                const allFeeds: ICalFeed[] = await res.json();
+                // Filter to only show feeds for the active property
+                if (activePropertyId) {
+                    setFeeds(allFeeds.filter((f) => f.propertyId === activePropertyId));
+                } else {
+                    setFeeds(allFeeds);
                 }
             }
         } catch (error) {
-            console.error("Failed to fetch data:", error);
+            console.error("Failed to fetch feeds:", error);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [activePropertyId]);
 
     useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+        if (!propLoading) fetchFeeds();
+    }, [fetchFeeds, propLoading]);
 
     const handleAddFeed = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!activePropertyId) {
+            toast.error("No property selected. Please select a property in the header.");
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -86,7 +83,7 @@ export default function ICalPage() {
                 body: JSON.stringify({
                     name: newName,
                     url: newUrl,
-                    propertyId: newPropertyId,
+                    propertyId: activePropertyId,
                 }),
             });
 
@@ -99,7 +96,7 @@ export default function ICalPage() {
             setNewName("");
             setNewUrl("");
             setShowAddForm(false);
-            fetchData();
+            fetchFeeds();
         } catch (error: any) {
             toast.error(error.message);
         } finally {
@@ -123,7 +120,7 @@ export default function ICalPage() {
             }
 
             toast.success(data.message);
-            fetchData();
+            fetchFeeds();
         } catch (error: any) {
             toast.error(error.message);
         } finally {
@@ -139,22 +136,24 @@ export default function ICalPage() {
             if (!res.ok) throw new Error("Failed to delete feed");
 
             toast.success("Feed removed");
-            fetchData();
+            fetchFeeds();
         } catch (error: any) {
             toast.error(error.message);
         }
     };
 
-    const handleCopyExportUrl = async (propertyId: string) => {
-        const url = `${window.location.origin}/api/ical/export?propertyId=${propertyId}`;
+    const handleCopyExportUrl = async () => {
+        if (!activePropertyId) return;
+        const url = `${window.location.origin}/api/ical/export?propertyId=${activePropertyId}`;
         await navigator.clipboard.writeText(url);
-        setCopiedId(propertyId);
+        setCopiedId(activePropertyId);
         toast.success("Export URL copied to clipboard!");
         setTimeout(() => setCopiedId(null), 2000);
     };
 
-    const handleDownloadIcs = (propertyId: string) => {
-        window.open(`/api/ical/export?propertyId=${propertyId}`, "_blank");
+    const handleDownloadIcs = () => {
+        if (!activePropertyId) return;
+        window.open(`/api/ical/export?propertyId=${activePropertyId}`, "_blank");
     };
 
     const formatDate = (dateStr: string | null) => {
@@ -162,7 +161,7 @@ export default function ICalPage() {
         return new Date(dateStr).toLocaleString();
     };
 
-    if (loading) {
+    if (loading || propLoading) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 className="w-8 h-8 text-brand-400 animate-spin" />
@@ -178,6 +177,11 @@ export default function ICalPage() {
                 <p className="text-foreground/60">
                     Import calendars from Airbnb, Booking.com, or other platforms. Export your bookings as an iCal feed.
                 </p>
+                {activeProperty && (
+                    <p className="text-sm text-brand-400 mt-1 font-medium">
+                        Showing feeds for: {activeProperty.name}
+                    </p>
+                )}
             </header>
 
             {/* ─── IMPORT SECTION ─── */}
@@ -196,7 +200,7 @@ export default function ICalPage() {
                     </button>
                 </div>
 
-                {/* Add Feed Form */}
+                {/* Add Feed Form — simplified: only name + URL */}
                 {showAddForm && (
                     <form
                         onSubmit={handleAddFeed}
@@ -218,43 +222,26 @@ export default function ICalPage() {
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                    Property
+                                    iCal URL
                                 </label>
-                                <select
+                                <input
+                                    type="url"
                                     required
-                                    value={newPropertyId}
-                                    onChange={(e) => setNewPropertyId(e.target.value)}
-                                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm"
-                                >
-                                    {properties.map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                            {p.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder="https://www.airbnb.com/calendar/ical/..."
+                                    value={newUrl}
+                                    onChange={(e) => setNewUrl(e.target.value)}
+                                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm font-mono"
+                                />
                             </div>
                         </div>
 
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                                iCal URL
-                            </label>
-                            <input
-                                type="url"
-                                required
-                                placeholder="https://www.airbnb.com/calendar/ical/..."
-                                value={newUrl}
-                                onChange={(e) => setNewUrl(e.target.value)}
-                                className="w-full bg-slate-900/50 border border-white/10 rounded-xl py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm font-mono"
-                            />
-                            <p className="text-xs text-slate-500 mt-1">
-                                Find this in your Airbnb listing → Availability → iCal URL
-                            </p>
-                        </div>
+                        <p className="text-xs text-slate-500">
+                            The feed will be linked to <span className="text-brand-400 font-semibold">{activeProperty?.name || "the selected property"}</span> automatically.
+                        </p>
 
                         <button
                             type="submit"
-                            disabled={submitting}
+                            disabled={submitting || !activePropertyId}
                             className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-all"
                         >
                             {submitting ? (
@@ -287,9 +274,6 @@ export default function ICalPage() {
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="font-semibold text-white truncate">
                                             {feed.name}
-                                        </span>
-                                        <span className="text-xs px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded-full shrink-0">
-                                            {feed.property?.name || "Unknown"}
                                         </span>
                                     </div>
                                     <p className="text-xs text-slate-500 font-mono truncate">
@@ -335,66 +319,51 @@ export default function ICalPage() {
             </section>
 
             {/* ─── EXPORT SECTION ─── */}
-            <section>
-                <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
-                    <ExternalLink className="w-5 h-5 text-cyan-400" />
-                    Export Your Calendar
-                </h2>
-                <p className="text-sm text-slate-400 mb-4">
-                    Share these links with Airbnb, Booking.com, or any platform that supports iCal imports.
-                </p>
+            {activeProperty && (
+                <section>
+                    <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+                        <ExternalLink className="w-5 h-5 text-cyan-400" />
+                        Export Your Calendar
+                    </h2>
+                    <p className="text-sm text-slate-400 mb-4">
+                        Share this link with Airbnb, Booking.com, or any platform that supports iCal imports.
+                    </p>
 
-                {properties.length === 0 ? (
-                    <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center">
-                        <Calendar className="w-10 h-10 text-slate-500 mx-auto mb-3" />
-                        <p className="text-slate-400 font-medium">No properties yet</p>
-                        <p className="text-slate-500 text-sm mt-1">
-                            Add a property first to get your export links.
-                        </p>
-                    </div>
-                ) : (
-                    <div className="space-y-3">
-                        {properties.map((property) => (
-                            <div
-                                key={property.id}
-                                className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="flex-1 min-w-0">
+                            <span className="font-semibold text-white">
+                                {activeProperty.name}
+                            </span>
+                            <p className="text-xs text-slate-500 font-mono truncate mt-1">
+                                {typeof window !== "undefined"
+                                    ? `${window.location.origin}/api/ical/export?propertyId=${activePropertyId}`
+                                    : `/api/ical/export?propertyId=${activePropertyId}`}
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button
+                                onClick={handleCopyExportUrl}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 text-cyan-400 rounded-xl text-xs font-semibold transition-all"
                             >
-                                <div className="flex-1 min-w-0">
-                                    <span className="font-semibold text-white">
-                                        {property.name}
-                                    </span>
-                                    <p className="text-xs text-slate-500 font-mono truncate mt-1">
-                                        {typeof window !== "undefined"
-                                            ? `${window.location.origin}/api/ical/export?propertyId=${property.id}`
-                                            : `/api/ical/export?propertyId=${property.id}`}
-                                    </p>
-                                </div>
-
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                        onClick={() => handleCopyExportUrl(property.id)}
-                                        className="flex items-center gap-1.5 px-3 py-2 bg-cyan-600/10 hover:bg-cyan-600/20 border border-cyan-500/20 text-cyan-400 rounded-xl text-xs font-semibold transition-all"
-                                    >
-                                        {copiedId === property.id ? (
-                                            <CheckCircle className="w-3.5 h-3.5" />
-                                        ) : (
-                                            <Copy className="w-3.5 h-3.5" />
-                                        )}
-                                        {copiedId === property.id ? "Copied!" : "Copy Link"}
-                                    </button>
-                                    <button
-                                        onClick={() => handleDownloadIcs(property.id)}
-                                        className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl text-xs font-semibold transition-all"
-                                    >
-                                        <Download className="w-3.5 h-3.5" />
-                                        Download
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
+                                {copiedId === activePropertyId ? (
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                )}
+                                {copiedId === activePropertyId ? "Copied!" : "Copy Link"}
+                            </button>
+                            <button
+                                onClick={handleDownloadIcs}
+                                className="flex items-center gap-1.5 px-3 py-2 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-xl text-xs font-semibold transition-all"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                Download
+                            </button>
+                        </div>
                     </div>
-                )}
-            </section>
+                </section>
+            )}
         </div>
     );
 }

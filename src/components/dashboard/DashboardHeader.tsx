@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { Bell, Search, User, LogOut } from "lucide-react";
 import MobileSidebar from "./MobileSidebar";
+import PropertySwitcher from "./PropertySwitcher";
 import NotificationCenter from "@/components/NotificationCenter";
 
 export default function DashboardHeader() {
@@ -29,6 +30,7 @@ export default function DashboardHeader() {
             <div className="h-full flex items-center justify-between px-4 md:px-8 relative">
                 <div className="flex items-center gap-2 md:gap-4 flex-1 max-w-xl">
                     <MobileSidebar />
+                    <PropertySwitcher />
                     <div className="relative group w-full md:w-auto hidden sm:block">
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40 group-focus-within:text-brand-400 transition-colors" />
                         <input
